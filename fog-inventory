@@ -1,11 +1,11 @@
 #! /usr/bin/python3
 #
-# Update FOG inventory from a live client. 
+# Update FOG inventory.
 # Copyright (c) 2021, John Mechalas
 #
 # This utility needs to be run as root when collecting inventory
 # data from a running system. This is necessary in order to
-# execute dmidecode and hdparm, however the scripts lowers its
+# execute dmidecode and hdparm, however the script lowers its
 # privileges immediately and only elevates them as needed.
 #
 # Distributed under the BSD 3-Clause. If your distribution did not
