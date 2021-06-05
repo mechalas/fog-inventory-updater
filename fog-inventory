@@ -1,0 +1,490 @@
+#! /usr/bin/python3
+#
+# Update FOG inventory from a live client. 
+# Copyright (c) 2021, John Mechalas
+#
+# This utility needs to be run as root when collecting inventory
+# data from a running system. This is necessary in order to
+# execute dmidecode and hdparm, however the scripts lowers its
+# privileges immediately and only elevates them as needed.
+#
+# Distributed under the BSD 3-Clause. If your distribution did not
+# include a license file, see the license terms at:
+#
+# https://opensource.org/licenses/BSD-3-Clause
+#
+#----------------------------------------------------------------------
+
+import argparse
+import subprocess
+import os
+import sys
+import json
+import socket
+import urllib3
+
+#----------------------------------------------------------------------
+# Drop privs to 'nobody' (we need this defined before we call it).
+#----------------------------------------------------------------------
+
+def lower_privs():
+	if not admin:
+		return
+
+	# Set the saved uid to 0 so we can raise our privs again.
+
+	os.setresuid(-1, -1, 0)
+
+#----------------------------------------------------------------------
+# Preflight
+#----------------------------------------------------------------------
+
+if os.getuid():
+	admin= False
+else:
+	admin= True
+
+# Lower our privs immediately.
+
+lower_privs()
+
+os.environ['PATH']= '/bin:/usr/bin:/sbin:/usr/sbin'
+
+#----------------------------------------------------------------------
+# Our class for interacting with FOG. This is not a complete API
+# implementation; just enough for what we're doing.
+#----------------------------------------------------------------------
+
+class FOGService:
+	def __init__(self, baseurl, fogtoken, usertoken):
+		# Get a connection pool
+
+		self.client= urllib3.PoolManager()
+		self.baseurl= baseurl
+		self.headers= {
+			'Content-type': 'application/json',
+			'fog-user-token': usertoken,
+			'fog-api-token': fogtoken
+		}
+
+	def request(self, endpoint, method='GET', data=None):
+		url= f'{self.baseurl}{endpoint}'
+
+		if data is None:
+			return self.client.request(method, url, headers=self.headers)
+
+		return self.client.request(method, url, headers=self.headers,
+			body=json.dumps(data))
+
+	#----------------------------------------
+	# Update host information
+	#----------------------------------------
+
+	def update_host(self, hostid, data):
+		if invid is None:
+			raise TypeError('hostid cannot be None')
+
+		if data is None:
+			raise TypeError('data cannot be None')
+
+		if 'id' in data:
+			del data['id']
+
+		r= self.request(f'/host/{hostid}/edit', method='PUT', data=data)
+		if r.status != 200:
+			raise urllib3.exceptions.HTTPError('{:d} {:s}'.format(r.status, r.reason))
+
+		hostdata= json.loads(r.data.decode('utf-8'))
+
+		return hostdata
+
+
+	#----------------------------------------
+	# Create inventory
+	#----------------------------------------
+
+	def create_inventory(self, hostid, newdata):
+		basedata= {
+			'biosdate': "",
+			'biosvendor': "",
+			'biosversion': "",
+			'caseasset': "",
+			'caseman': "",
+			'caseserial': "",
+			'casever': "",
+			'cpucurrent': "",
+			'cpuman': "",
+			'cpumax': "",
+			'cpuversion': "",
+			'createdTime': "",
+			'deleteDate': "0000-00-00 00:00:00",
+			'mbasset': "",
+			'mbman': "",
+			'mbproductname': "",
+			'mbserial': "",
+			'mbversion': "",
+			'mem': "",
+			'other1': "",
+			'other2': "",
+			'primaryUser': "",
+			'sysman': "",
+			'sysproduct': "",
+			'sysserial': "",
+			'sysuuid': "",
+			'sysversion': "",
+		}
+
+		if newdata is None:
+			raise TypeError('data cannot be None')
+
+		if 'id' in newdata:
+			del newdata['id']
+
+		data= basedata.copy()
+		data.update(newdata)
+
+		if hostid is None:
+			raise TypeError('data cannot be None')
+
+		data['hostID']= str(hostid)
+
+		r= self.request(f'/inventory/create', method='POST', data=data)
+		if r.status != 200:
+			print(json.dumps(data, indent=4))
+			raise urllib3.exceptions.HTTPError('{:d} {:s}'.format(r.status, r.reason))
+
+		invdata= json.loads(r.data.decode('utf-8'))
+
+		return invdata
+
+	#----------------------------------------
+	# Update inventory data
+	#----------------------------------------
+
+	def update_inventory(self, invid, data):
+		if invid is None:
+			raise TypeError('invid cannot be None')
+
+		if data is None:
+			raise TypeError('data cannot be None')
+
+		if 'id' in data:
+			del data['id']
+
+		r= self.request(f'/inventory/{invid}/edit', method='PUT', data=data)
+		if r.status != 200:
+			raise urllib3.exceptions.HTTPError('{:d} {:s}'.format(r.status, r.reason))
+
+		exit(0)
+
+	#----------------------------------------
+	# Lookup a host by name
+	#----------------------------------------
+
+	def find_host(self, name=None, hostid=None):
+		if name is not None:
+			lname= name.lower().strip()
+
+			endpoint= f'/host/search/{lname}'
+		elif hostif is not None:
+			endpoint= f'/host/{hostid}'
+
+		r= self.request(endpoint)
+		if r.status != 200:
+			raise urllib3.exceptions.HTTPError('{:d} {:s}'.format(r.status, r.reason))
+			exit(1)
+	
+		hosts= json.loads(r.data.decode('utf-8'))
+		if 'hosts' not in hosts:
+			print('Invalid JSON response from server')
+			exit(1)
+
+		for host in hosts['hosts']:
+			if 'name' not in host:
+				continue
+			if host['name'].lower().strip() == lname:
+				invidstr= host['inventory']['id']
+				if invidstr == "":
+					invid= None
+				else:
+					invid= int(invidstr)
+
+				return host, invid
+
+		raise ValueError(f'Host "{name}" not found')
+
+#----------------------------------------------------------------------
+# Collect our system inventory
+#----------------------------------------------------------------------
+
+def collect_inventory():
+	inventory= {}
+	dmifields= {
+		'biosdate': 'bios-release-date',
+		'biosvendor': 'bios-vendor',
+		'biosversion': 'bios-version',
+		'caseasset': 'chassis-asset-tag',
+		'caseman': 'chassis-manufacturer',
+		'caseserial': 'chassis-serial-number',
+		'casever': 'chassis-version',
+		'cpuman': 'processor-manufacturer',
+		'cpuversion': 'processor-version',
+		'mbasset': 'baseboard-asset-tag',
+		'mbman': 'baseboard-manufacturer',
+		'mbproductname': 'baseboard-product-name',
+		'mbserial': 'baseboard-serial-number',
+		'mbversion': 'baseboard-version',
+		'sysman': 'system-manufacturer',
+		'sysproduct': 'system-product-name',
+		'sysserial': 'system-serial-number',
+		'sysuuid': 'system-uuid',
+		'sysversion': 'system-version'
+	}
+
+	# Run dmidecode
+	raise_privs()
+	for fogfield,dmistring in dmifields.items():
+		try:
+			val= subprocess.check_output(['dmidecode', '-s', dmistring]).decode('ascii').strip().replace('\n', ' ')
+		except Exception as e:
+			print(str(e), file=sys.stderr)
+			continue
+
+		inventory[fogfield]= val
+
+	# Some items don't have strings for the -s option
+
+	try:
+		dmitype3= subprocess.check_output(['dmidecode', '-t', '3']).decode('ascii')
+	except Exception as e:
+		dmitype3= None
+		print(str(e), file=sys.stderr)
+
+	try:
+		dmitype4= subprocess.check_output(['dmidecode', '-t', '4']).decode('ascii')
+	except Exception as e:
+		dmitype4= None
+		print(str(e), file=sys.stderr)
+
+	# We don't need to be root for a bit
+
+	lower_privs()
+
+	# Now parse the dmidecode output
+	
+	if dmitype4 is not None:
+		data= dmidecode_find(('Current Speed', 'Max Speed'), dmitype4)
+
+		if 'Current Speed' in data:
+			inventory['cpucurrent']= data['Current Speed']
+		if 'Max Speed' in data:
+			inventory['cpumax']= data['Max Speed']
+
+	if dmitype3 is not None:
+		data= dmidecode_find(('Type'), dmitype3)
+		if 'Type' in data:
+			inventory['systype']= data['Type']
+
+	# Get system memory info
+
+	with open('/proc/meminfo', 'r') as fp:
+		meminfo= fp.read()
+		fp.close()
+
+	for line in meminfo.split('\n'):
+		field, val= line.split(':')
+		if field == 'MemTotal':
+			val= val.strip()
+			inventory['mem']= 'MemTotal: '+val
+			#inventory['memory']= '{:.2f} GiB'.format(float(val.split(' ')[0])/(1024*1024))
+			break
+
+		sval= val.strip
+		
+
+	# Get primary disk device. We'll assume it's the one mounted on /
+
+	out= subprocess.check_output(('df', '--output=source', '/')).decode('ascii').strip().split('\n')
+	if len(out) == 2:
+		hddev= out[1].strip()
+
+		# Needed for hdparm
+		raise_privs()
+
+		try:
+			out2= subprocess.check_output(('hdparm', '-i', hddev)).decode('ascii').strip().split('\n')
+		except Exception as e:
+			print(str(e), file=sys.stderr)
+			out2= ()
+
+		# And back
+		lower_privs()
+
+		for line in out2:
+			sline= line.strip()
+			if sline.startswith('Model='):
+				inventory['hdmodel'], inventory['hdfirmware'], inventory['hdserial']= list(map(lambda x: x.split('=')[1].strip(), sline.split(', ')))
+				break
+
+	return inventory
+
+# Find the specified fields in the dmidecode output
+
+def dmidecode_find(sarray, dmioutput):
+	results= {}
+
+	for line in dmioutput.split('\n'):
+		if line.startswith('#'):
+			continue
+
+		sline= line.strip()
+
+		if not len(sline):
+			continue
+
+		if sline.find(': ') == -1:
+			continue
+
+		field= sline.split(': ')[0]
+		if field in sarray:
+			results[field]= sline
+
+	return results
+
+#----------------------------------------------------------------------
+# Raise our privs again
+#----------------------------------------------------------------------
+
+def raise_privs():
+	if not admin:
+		return
+
+	os.setresuid(0, 0, 0)
+
+#===========================================================================
+# Main program starts here
+#===========================================================================
+
+parser= argparse.ArgumentParser()
+
+parser.add_argument('-A', '--fog-api-token', metavar='TOKEN', 
+	help='The FOG API token')
+parser.add_argument('-U', '--user-api-token', metavar='TOKEN',
+	help='The user API token')
+
+parser.add_argument('-c', '--fetch-current', action='store_true',
+	help="Fetch the current inventory data for the host rather than updating it.")
+parser.add_argument('-f', '--file',
+	help="Update the inventory using the JSON data from FILE. Useful for updating arbitrary systems, individual inventory fields, or systems where root access is not available.")
+parser.add_argument('-n', '--dryrun', action='store_true',
+	help="Show the inventory data but don't submit it to the FOG server.")
+parser.add_argument('-u', '--fog-server-url', metavar='URL',
+	help='The FOG server name')
+parser.add_argument('-x', '--inventory-only', action='store_true',
+	help='Only collect and show the new inventory data. Do not attempt to find the host in FOG or submit the data. You do not need to provide API tokens with this option.')
+
+parser.add_argument('-p', '--primary-user', metavar='USER',
+	help='Set the "Primary User" field in the inventory data')
+parser.add_argument('-o1', '--other1', metavar='INFO',
+	help='Set the "Other Tag #1" field in the inventory data')
+parser.add_argument('-o2', '--other2', metavar='INFO',
+	help='Set the "Other Tag #2" field in the inventory data')
+
+groupx= parser.add_mutually_exclusive_group()
+groupx.add_argument('-H', '--hostname',
+	help='Use the hostname HOSTNAME instead of the local system name.')
+groupx.add_argument('-i', '--host-id', metavar='HOSTID',
+	help='Use the host with id HOSTID instead of the local system name.')
+
+args= parser.parse_args()
+
+# Args handling 
+
+if args.fog_api_token is None and args.user_api_token is None:
+	if not args.inventory_only:
+		print('Both --fog-api-token abd --user-api-token are required')
+		exit(1)
+
+# Get the FOG server url
+
+if args.fog_server_url is None and not args.inventory_only:
+	# Try to open the fog client settings file.
+
+	# Just in case..
+	raise_privs()
+	try:
+		with open("/opt/fog-service/settings.json") as fp:
+			s= fp.read()
+			fp.close()
+	except Exception as e:
+		print(str(e), file=sys.stderr)
+		print('Could not open FOG client settings. Rerun with --fog-server-url option.')
+		exit(1)
+
+	settings= json.loads(s)
+	proto= 'http'
+	try:
+		if int(settings['HTTPS']):
+			proto= 'https'
+	except Exception:
+		pass
+
+	baseurl= '{:s}://{:s}{:s}'.format(proto, settings['Server'], settings['WebRoot'])
+else:
+	baseurl= args.fog_server_url
+
+
+# Which host are we updating?
+
+inv_id= None
+if not args.inventory_only:
+	fog= FOGService(baseurl, args.fog_api_token, args.user_api_token)
+
+	if args.host_id is not None:
+		hostid= args.host_id
+		host, invid= fog.find_host(hostid=args.host_id)
+	elif args.hostname is not None:
+		host, invid= fog.find_host(name=args.hostname)
+		hostid= host['id']
+	else:
+		host, invid= fog.find_host(name=socket.gethostname())
+		hostid= host['id']
+
+	if args.fetch_current:
+		del host['inventory']['id']
+		del host['inventory']['hostID']
+		print(json.dumps(host['inventory'], indent=4))
+		exit(0)
+
+if args.file:
+	with open(args.file, 'r') as fp:
+		inventory= json.loads(fp.read())
+		fp.close()
+else:
+	inventory= collect_inventory()
+
+# Manually entered inventory fields. 
+
+if args.primary_user is not None:
+	inventory['primaryUser']= args.primary_user
+
+if args.other1 is not None:
+	inventory['other1']= args.other1
+
+if args.other2 is not None:
+	inventory['other2']= args.other2
+
+# Print our info if we aren't updating.
+
+if args.dryrun or args.inventory_only:
+	print(json.dumps(inventory, indent=4))
+	exit(0)
+
+if invid is None:
+	# No inventory exists for this device, so create it
+	print(json.dumps(fog.create_inventory(hostid, inventory), indent=4))
+else:
+	print(json.dumps(fog.update_inventory(invid, inventory), indent=4))
+
+exit(0)
+
