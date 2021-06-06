@@ -2,12 +2,12 @@
 
 This is a Python command-line utility that can create, update, and edit inventory data for hosts on a FOG server.
 
-FOG only updates the inventory data for a host when it's PXE explicitly booted to FOS to run an inventory task. This script provides a method of updating inventory without having to do that, allowing you to:
+FOG only updates the inventory data for a host when it's explicitly PXE booted to FOS to run an inventory task. This script provides a method of updating inventory without having to do that, allowing you to:
 
 * Update inventory on a running host on demand
-* Update an arbitrary host's inventory, provided it has been collected in advance or manually provided
+* Update an arbitrary host's inventory, provided it has been collected in advance or manually provided through other means
 
-It follows the same methodology as FOS in collecting invtentory (with one exception). Specifically it:
+It follows the same methodology as FOS when collecting invtentory (with one exception). Specifically it:
 
 1. Executes `dmidecode -s string` for each of the strings supported by the command. See dmicecode(1) for a full list. These provide information about the system, CPU, motherboard, chassis, and BIOS.
 1. Executes `dmidecode -t 4` to obtain the CPU's base and maximum frequency
@@ -15,7 +15,7 @@ It follows the same methodology as FOS in collecting invtentory (with one except
 1. Reads total system memory from /proc/meminfo
 1. Executes `hdparm -i` to get the model, serial number, and firmware of the primary disk device
 
-Unlike FOS, the primary disk device is assumed to be the one where / is mounted. This methodology doesn't work well on logical volumes (e.g. lvm and RAID volumes).
+Unlike FOS, the primary disk device is assumed to be the one where / is mounted. The current methodology is simplistic doesn't work well on logical volumes (e.g. lvm and RAID volumes).
 
 **This script must be run as root when collecting inventory data on a system.** This is necessary for running `dmidecode` and `hdparm`, but the script lowers its priviledges to the user nobody and only elevates them back to root when it needs to execute then (and then immediately lowers them again).
 
