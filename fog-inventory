@@ -379,7 +379,7 @@ parser.add_argument('-f', '--file',
 parser.add_argument('-n', '--dryrun', action='store_true',
 	help="Show the inventory data but don't submit it to the FOG server.")
 parser.add_argument('-u', '--fog-server-url', metavar='URL',
-	help='The FOG server name')
+	help='The FOG server base URL (typically https://hostname/fog")')
 parser.add_argument('-x', '--inventory-only', action='store_true',
 	help='Only collect and show the new inventory data. Do not attempt to find the host in FOG or submit the data. You do not need to provide API tokens with this option.')
 
