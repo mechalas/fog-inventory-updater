@@ -129,7 +129,10 @@ The allowed fields are:
 | mbproductname | The motherboard's product or model name |
 | mbserial | The motherboard's serial number |
 | mbversion | The motherboard version string |
-| mem | The total system memory | 
+| mem | The total system memory |
+| other1 | The data for "Other Tag #1" |
+| other2 | The date for "Other Tag #2" |
+| primaryUser | The primary user of the system |
 | sysman | The system manufacuter |
 | sysproduct | The system's product or model name |
 | sysserial | The system's serial number |
