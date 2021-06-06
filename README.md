@@ -108,7 +108,9 @@ This mode requires both the FOG API token and a user API token. The script does 
 
 In this mode, inventory data is read from the file specified by the `-f` option, and is uploaded to the FOG server. It's assumed that you are updating the inventory for the local machine, and that its hostname matches the host name in the FOG database. You can updating inventory for an arbitrary machine by specifying a hostname with `-H` or a FOG host ID with `-i`.
 
-The input file must be in JSON format, and all field data must be strings. The fields are:
+The input file must be in JSON format, and the field data must be strings. See the output from the `-c` or `-x` option for the format. _Only the fields to be edited need to be provided._
+
+The allowed fields are:
 
 | Field | Description |
 |-------|-------------|
