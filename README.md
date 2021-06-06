@@ -88,7 +88,7 @@ fog-inventory has four primary modes of operation.
 
 ### Collect inventory data and upload it to FOG
 
-This is the default operating mode. The script will gather inventory data on the current host, and attempt to upload it to FOG. It assumes that the hostname of the local system matches host's name in the FOG database. If for some reason these differ, the host's name can be overridden with the `-H` option, or a FOG host ID can be provided with `-i`. If the host can't be found in FOG, it will exit without taking action and print an error.
+This is the default operating mode. The script will gather inventory data on the current host, and attempt to upload it to FOG. It assumes that the hostname of the local system matches host's name in the FOG database. If for some reason these differ, the host's name can be overridden with the `-H` option, or a FOG host ID can be provided with `-i`. If the host can't be found in FOG, it will exit without taking action and print an error. If the hosts exists but does not yet have an inventory record, a new one will be created.
 
 The primary user and "other" tags can be set with `-p`, `-o1` and `-o2`, respectively. These are the only FOG inventory items that cannot be automatically determined.
 
@@ -100,13 +100,13 @@ This mode requires both the FOG API token and a user API token, and the script m
 
 ### Fetch the current inventory data for a host
 
-When the `-c` option is supplied, the inventory information for the local system is fetched from the FOG server and printed to stdout. It assumes the hostname of th local system matches the host name in the FOG database. You can also fetch data for an arbitrary host by specifying a host name with `-H` or a FOG host ID with `-i`.
+When the `-c` option is supplied, the inventory information for the local system is fetched from the FOG server and printed to stdout. It assumes the hostname of th local system matches the host name in the FOG database. You can also fetch data for an arbitrary host by specifying a host name with `-H` or a FOG host ID with `-i`.  If the host can't be found in FOG, it will exit and print an error.
 
 This mode requires both the FOG API token and a user API token. The script does not need to be run as root.
 
 ### Upload inventory data from a file
 
-In this mode, inventory data is read from the file specified by the `-f` option, and is uploaded to the FOG server. It's assumed that you are updating the inventory for the local machine, and that its hostname matches the host name in the FOG database. You can updating inventory for an arbitrary machine by specifying a hostname with `-H` or a FOG host ID with `-i`.
+In this mode, inventory data is read from the file specified by the `-f` option, and is uploaded to the FOG server. It's assumed that you are updating the inventory for the local machine, and that its hostname matches the host name in the FOG database. You can updating inventory for an arbitrary machine by specifying a hostname with `-H` or a FOG host ID with `-i`. If the host can't be found in FOG, it will exit without taking action and print an error. If the hosts exists but does not yet have an inventory record, a new one will be created.
 
 The input file must be in JSON format, and the field data must be strings. See the output from the `-c` or `-x` option for the format. _Only the fields to be edited need to be provided._
 
