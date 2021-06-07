@@ -18,31 +18,44 @@
 import argparse
 import subprocess
 import os
+import platform
 import sys
 import json
 import socket
 import urllib3
 
+if platform.system() == 'Windows':
+	import winreg
+	import itertools
+	import psutil
+
 #----------------------------------------------------------------------
-# Drop privs to 'nobody' (we need this defined before we call it).
+# On Linux, drop privs to 'nobody' (we need this defined before we call
+# it).
 #----------------------------------------------------------------------
 
-def lower_privs():
+def lower_privs():	
 	if not admin:
 		return
 
-	# Set the saved uid to 0 so we can raise our privs again.
+	if os.name == 'posix':
+		# Set the saved uid to 0 so we can raise our privs again.
 
-	os.setresuid(-1, -1, 0)
+		os.setresuid(-1, -1, 0)
+	else:
+		raise NotImplementedError('This platform is not supported')
 
 #----------------------------------------------------------------------
 # Preflight
 #----------------------------------------------------------------------
 
-if os.getuid():
+if platform.system() == 'Windows':
 	admin= False
-else:
-	admin= True
+elif os.name == 'posix':
+	if os.getuid():
+		admin= False
+	else:
+		admin= True
 
 # Lower our privs immediately.
 
@@ -218,6 +231,78 @@ class FOGService:
 #----------------------------------------------------------------------
 
 def collect_inventory():
+	if platform.system() == 'Linux':
+		return collect_inventory_linux()
+	elif platform.system() == 'Windows':
+		return collect_inventory_windows()
+	else:
+		raise NotImplementedError('Platform not supported')
+
+#----------------------------------------
+# Collect inventory on Windows
+#----------------------------------------
+
+def collect_inventory_windows():
+
+	inventory= {}
+	regfields_bios= {
+		'biosdate': 'BIOSReleaseDate',
+		'biosvendor': 'BIOSVendor',
+		'biosversion': 'BIOSVersion',
+		'mbman': 'BaseBoardManufacturer',
+		'mbproductname': 'BaseBoardProduct',		
+		'mbversion': 'BaseBoardVersion',
+		'sysman': 'SystemManufacturer',
+		'sysproduct': 'SystemProductName',
+		'sysversion': 'SystemVersion'
+	}
+
+	hklm= winreg.ConnectRegistry(None, winreg.HKEY_LOCAL_MACHINE)
+	key_bios= winreg.OpenKey(hklm, r'HARDWARE\\DESCRIPTION\\System\\BIOS')
+
+	for field,kvalue in regfields_bios.items():
+		inventory[field]= get_regkey_value(key_bios, kvalue)
+
+	key_sysinfo= winreg.OpenKey(hklm, r'SYSTEM\\CurrentControlSet\\Control\\SystemInformation')
+	inventory['sysuuid']= get_regkey_value(key_sysinfo, 'ComputerHardwareId').replace('{', '').replace('}', '')
+
+	# CPU data
+
+	ncpus= psutil.cpu_count(logical=False)
+	key_cpu= winreg.OpenKey(hklm, r'HARDWARE\\DESCRIPTION\\System\\CentralProcessor\\0')
+
+	# Doesn't exactly match FOS since there's not an easy way to get 
+	# socket count on Windows
+	inventory['cpuman']= get_regkey_value(key_cpu, "VendorIdentifier")
+	inventory['cpuversion']= get_regkey_value(key_cpu, "ProcessorNameString")
+
+	# Record these the way FOG collects them on Linux
+	inventory['cpucurrent']= "Current Speed: {:d} MHz".format(get_regkey_value(key_cpu, "~MHz"))
+	inventory['mem']= 'MemTotal: {:d} kB'.format(round(psutil.virtual_memory().total/1024))
+
+	return inventory
+
+def get_regkey_value(key, value):
+	try:
+		s= winreg.QueryValueEx(key, value)[0]
+	except FileNotFoundError:
+		return ""
+
+	if s == 'Default string':
+		return ""
+
+	return s
+
+def get_subkeys(reg, key):
+	with winreg.OpenKey(reg, key) as k:
+		for i in itertools.count():
+			yield winreg.EnumKey(k, i)
+
+#----------------------------------------
+# Collect inventory on Linux
+#----------------------------------------
+
+def collect_inventory_linux():
 	inventory= {}
 	dmifields= {
 		'biosdate': 'bios-release-date',
@@ -359,7 +444,10 @@ def raise_privs():
 	if not admin:
 		return
 
-	os.setresuid(0, 0, 0)
+	if os.name == 'posix':
+		os.setresuid(0, 0, 0)
+	else:
+		raise NotImplementedError('This platform is not supported')
 
 #===========================================================================
 # Main program starts here
