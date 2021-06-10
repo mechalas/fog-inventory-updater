@@ -495,7 +495,7 @@ args= parser.parse_args()
 
 if args.fog_api_token is None and args.user_api_token is None:
 	if not args.inventory_only:
-		print('Both --fog-api-token abd --user-api-token are required')
+		print('Both --fog-api-token and --user-api-token are required')
 		exit(1)
 
 # Get the FOG server url
