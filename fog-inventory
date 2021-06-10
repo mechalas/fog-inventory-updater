@@ -462,8 +462,13 @@ parser.add_argument('-U', '--user-api-token', metavar='TOKEN',
 
 parser.add_argument('-c', '--fetch-current', action='store_true',
 	help="Fetch the current inventory data for the host rather than updating it.")
-parser.add_argument('-f', '--file',
-	help="Update the inventory using the JSON data from FILE. Useful for updating arbitrary systems, individual inventory fields, or systems where root access is not available.")
+
+groupex= parser.add_mutually_exclusive_group()
+groupex.add_argument('-f', '--file',
+	help="Update the inventory using the JSON data from FILE. Useful for updating arbitrary systems, individual inventory fields, or systems where root access is not available. Specify - as the filename to read from stdin.")
+groupex.add_argument('-j', '--json', 
+	help="Like --file, but provide the inventory data as JSON on the command line.")
+
 parser.add_argument('-n', '--dryrun', action='store_true',
 	help="Show the inventory data but don't submit it to the FOG server.")
 parser.add_argument('-u', '--fog-server-url', metavar='URL',
@@ -554,6 +559,9 @@ if args.file:
 
 	if args.file != '-':
 		fp.close()
+
+elif args.json:
+	inventory= json.loads(args.json)
 
 else:
 	inventory= collect_inventory()

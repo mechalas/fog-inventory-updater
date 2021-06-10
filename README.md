@@ -46,39 +46,55 @@ The API system must be enabled on your FOG server (FOG Configuration -> FOG Sett
 ## Usage
 
 ```
-usage: fog-inventory [-h] [-A TOKEN] [-U TOKEN] [-c] [-f FILE] [-n] [-u URL]
-                     [-x] [-p USER] [-o1 INFO] [-o2 INFO]
+usage: fog-inventory [-h] [-A TOKEN] [-U TOKEN] [-c] [-f FILE | -j JSON] [-n]
+                     [-u URL] [-x] [-p USER] [-o1 INFO] [-o2 INFO]
                      [-H HOSTNAME | -i HOSTID]
 
 optional arguments:
   -h, --help            show this help message and exit
+
   -A TOKEN, --fog-api-token TOKEN
                         The FOG API token
+
   -U TOKEN, --user-api-token TOKEN
                         The user API token
+
   -c, --fetch-current   Fetch the current inventory data for the host rather
                         than updating it.
+
   -f FILE, --file FILE  Update the inventory using the JSON data from FILE.
                         Useful for updating arbitrary systems, individual
                         inventory fields, or systems where root access is not
-                        available.
+                        available. Specify - as the filename to read from
+                        stdin
+
+  -j JSON, --json JSON  Like --file, but provide the inventory data as JSON
+                        on the command line.
+
   -n, --dryrun          Show the inventory data but don't submit it to the FOG
                         server.
+
   -u URL, --fog-server-url URL
                         The FOG server name
+
   -x, --inventory-only  Only collect and show the new inventory data. Do not
                         attempt to find the host in FOG or submit the data.
                         You do not need to provide API tokens with this
                         option.
+
   -p USER, --primary-user USER
                         Set the "Primary User" field in the inventory data
+
   -o1 INFO, --other1 INFO
                         Set the "Other Tag #1" field in the inventory data
+
   -o2 INFO, --other2 INFO
                         Set the "Other Tag #2" field in the inventory data
+
   -H HOSTNAME, --hostname HOSTNAME
                         Use the hostname HOSTNAME instead of the local system
                         name.
+
   -i HOSTID, --host-id HOSTID
                         Use the host with id HOSTID instead of the local
                         system name.
