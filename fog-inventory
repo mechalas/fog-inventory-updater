@@ -545,9 +545,16 @@ if not args.inventory_only:
 		exit(0)
 
 if args.file:
-	with open(args.file, 'r') as fp:
-		inventory= json.loads(fp.read())
+	if args.file == '-':
+		fp= sys.stdin
+	else:
+		fp= open(args.file, 'r')
+
+	inventory= json.loads(fp.read())
+
+	if args.file != '-':
 		fp.close()
+
 else:
 	inventory= collect_inventory()
 
