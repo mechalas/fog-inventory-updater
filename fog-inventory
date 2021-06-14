@@ -205,8 +205,8 @@ class FOGService:
 		r= self.request(endpoint)
 		if r.status != 200:
 			raise urllib3.exceptions.HTTPError('{:d} {:s}'.format(r.status, r.reason))
-			exit(1)
-	
+			exit(1)         
+
 		hosts= json.loads(r.data.decode('utf-8'))
 		if 'hosts' not in hosts:
 			print('Invalid JSON response from server')
@@ -217,7 +217,7 @@ class FOGService:
 				continue
 			if host['name'].lower().strip() == lname:
 				invidstr= host['inventory']['id']
-				if invidstr == "":
+				if invidstr is None:
 					invid= None
 				else:
 					invid= int(invidstr)
@@ -530,9 +530,12 @@ if not args.inventory_only:
 
 	if args.host_id is not None:
 		hostid= args.host_id
+		#try:
 		host, invid= fog.find_host(hostid=args.host_id)
+			
 	elif args.hostname is not None:
-		host, invid= fog.find_host(name=args.hostname)
+		#try:
+		host, invid= fog.find_host(name=args.hostname)		
 		hostid= host['id']
 	else:
 		host, invid= fog.find_host(name=socket.gethostname())
