@@ -219,6 +219,8 @@ class FOGService:
 				invidstr= host['inventory']['id']
 				if invidstr is None:
 					invid= None
+				elif invid.strip() == '':
+					invid= None
 				else:
 					invid= int(invidstr)
 
